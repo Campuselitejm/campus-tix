@@ -491,6 +491,30 @@ function AdminReps(){
   return(
     <div className="space-y-5">
       <SHeader title="Sales Reps" subtitle={`${reps.length} reps`} action={<PBtn onClick={()=>setModal({type:"create"})}>➕ Add Rep</PBtn>}/>
+      {reps.filter(r=>r.status==="Pending Approval").length>0&&(
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <p className="font-bold text-amber-800 mb-3">⏳ Pending Approval ({reps.filter(r=>r.status==="Pending Approval").length})</p>
+          <div className="space-y-2">
+            {reps.filter(r=>r.status==="Pending Approval").map(r=>(
+              <div key={r.id} className="bg-white rounded-xl p-3 flex items-center justify-between border border-amber-200">
+                <div>
+                  <p className="font-semibold text-sm text-gray-900">{r.name}</p>
+                  <p className="text-xs text-gray-400">{r.university} · {r.email}</p>
+                  {r.phone&&<WhatsAppBtn phone={r.phone}/>}
+                </div>
+                <div className="flex gap-2 flex-shrink-0 ml-3">
+                  <button onClick={async()=>{
+                    const newRepId="REP"+String(reps.filter(x=>x.status==="Active").length+1).padStart(3,"0");
+                    await repsDB.update(r.id,{status:"Active",repId:newRepId,mustChangePassword:true});
+                    show(`${r.name} approved as ${newRepId}`);reload();
+                  }} className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white" style={{background:NAVY}}>✅ Approve</button>
+                  <button onClick={async()=>{await repsDB.delete(r.id);show("Rep rejected");reload();}} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-600 hover:bg-red-100">❌ Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Search reps, university..."/></div>
         <Table headers={["Rep","ID","Phone","Type","CE ID","Status","Password","Actions"]} rows={rows} loading={loading} empty="No reps yet"/>
@@ -738,7 +762,7 @@ function CoordinatorDashboard(){
         </div>
         <div className="flex items-center gap-2">
           {dueComm>0&&<span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{background:"#dc2626"}}>💵 {fmt.currency(dueComm)} Due</span>}
-          <button onClick={logout} className="text-xs text-gray-400 px-2 py-1 rounded-lg hover:bg-gray-100">🚪</button>
+          <button onClick={logout} className="flex items-center gap-1 text-xs font-semibold text-white px-3 py-1.5 rounded-lg" style={{background:NAVY}}>🚪 Sign Out</button>
         </div>
       </header>
       <main className="px-4 py-5 max-w-2xl mx-auto">
@@ -811,7 +835,12 @@ function CoordEventDetail({event,coordId,coordName,onBack}){
 
       {tab==="reps"&&(
         <div className="space-y-3">
-          {!isClosed&&<PBtn className="w-full" onClick={()=>setModal("allocate")}>🎟️ Allocate Tickets to Rep</PBtn>}
+          {!isClosed&&(
+            <div className="grid grid-cols-2 gap-2">
+              <PBtn className="w-full" onClick={()=>setModal("allocate")}>🎟️ Allocate Tickets</PBtn>
+              <PBtn variant="outline" className="w-full" onClick={()=>setModal("suggest-rep")}>➕ Suggest Rep</PBtn>
+            </div>
+          )}
           {inventory.map(inv=>{
             const rep=allReps.find(r=>r.repId===inv.repId);
             return(
@@ -927,8 +956,68 @@ function CoordEventDetail({event,coordId,coordName,onBack}){
       <Modal isOpen={modal?.type==="reassign"} onClose={()=>setModal(null)} title="Reassign Returned Tickets" size="sm">
         {modal?.return&&<div className="space-y-4"><div className="bg-gray-50 rounded-xl p-3"><p className="text-sm font-semibold">{modal.return.repName}</p><p className="text-xs text-gray-500">{modal.return.ticketsReturned} tickets available to reassign</p></div><FF label="Reassign To" required><select className={iCls} value={allocForm.repId} onChange={e=>{const r=allReps.find(x=>x.id===e.target.value);setAllocForm(f=>({...f,repId:e.target.value,repName:r?.name,repRepId:r?.repId}));}}><option value="">Select rep...</option>{allReps.filter(r=>r.repId!==modal.return.repId&&r.status==="Active").map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></FF><FF label="Qty to Reassign"><input className={iCls} type="number" min="1" max={modal.return.ticketsReturned} value={allocForm.qty} onChange={e=>setAllocForm(f=>({...f,qty:e.target.value}))} placeholder="0"/></FF><div className="flex gap-3"><button onClick={()=>setModal(null)} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving==="ra"} onClick={async()=>{if(!allocForm.repId||!allocForm.qty){show("Fill all fields");return;}setSaving("ra");try{await inventoryDB.reassign(modal.return.repId,allocForm.repRepId,allocForm.repName,event.id,Number(allocForm.qty));show("Tickets reassigned!");setModal(null);setAllocForm({repId:"",qty:""});reloadInv();reloadReturn();}catch(e){show("Error: "+e.message);}setSaving(null);}}>Reassign</PBtn></div></div>}
       </Modal>
+      {/* Suggest Rep Modal */}
+      <Modal isOpen={modal==="suggest-rep"} onClose={()=>setModal(null)} title="Suggest New Sales Rep" size="md">
+        <SuggestRepForm coordName={coordName} coordId={coordId} onClose={()=>setModal(null)} onShow={show}/>
+      </Modal>
+
       <Toast message={toast.message} visible={toast.visible}/>
     </div>
+  );
+}
+
+// ─── SUGGEST REP FORM ────────────────────────────────────────
+function SuggestRepForm({coordName,coordId,onClose,onShow}){
+  const[form,setForm]=useState({name:"",phone:"",email:"",university:"UWI Mona",residentCommuter:"Commuter",address:"",ceId:""});
+  const[saving,setSaving]=useState(false);
+  const[errors,setErrors]=useState({});
+  const validate=()=>{const e={};if(!form.name.trim())e.name="Required";if(!form.email.trim())e.email="Required";setErrors(e);return!Object.keys(e).length;};
+  const submit=async ev=>{
+    ev.preventDefault();if(!validate())return;
+    setSaving(true);
+    try{
+      // Generate a temp rep ID
+      const tempId="PENDING-"+Date.now().toString().slice(-6);
+      await repsDB.create({
+        repId:tempId,
+        name:form.name,
+        phone:form.phone,
+        email:form.email,
+        university:form.university,
+        residentCommuter:form.residentCommuter,
+        address:form.address,
+        ceId:form.ceId,
+        password:"pending123",
+        status:"Pending Approval",
+        mustChangePassword:true,
+      });
+      onShow("Rep submitted for admin approval!");
+      onClose();
+    }catch(e){onShow("Error: "+e.message);}
+    setSaving(false);
+  };
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  return(
+    <form onSubmit={submit} className="space-y-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+        ⚠️ This rep will be submitted for admin approval before they can log in.
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FF label="Full Name" required error={errors.name}><input className={iCls} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FF>
+        <FF label="Phone"><input className={iCls} type="tel" value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="+1 876-555-0000"/></FF>
+      </div>
+      <FF label="Email" required error={errors.email}><input className={iCls} type="email" value={form.email} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/></FF>
+      <FF label="University"><select className={iCls} value={form.university} onChange={e=>set("university",e.target.value)}>{UNIVERSITIES.map(u=><option key={u}>{u}</option>)}</select></FF>
+      <div className="grid grid-cols-2 gap-3">
+        <FF label="Resident / Commuter"><select className={iCls} value={form.residentCommuter} onChange={e=>set("residentCommuter",e.target.value)}><option>Commuter</option><option>Resident</option></select></FF>
+        <FF label="Campus Elite ID"><input className={iCls} value={form.ceId} onChange={e=>set("ceId",e.target.value)} placeholder="CE-XXXXX"/></FF>
+      </div>
+      <FF label="Address"><input className={iCls} value={form.address} onChange={e=>set("address",e.target.value)} placeholder="Full address"/></FF>
+      <div className="flex gap-3 pt-1">
+        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button>
+        <PBtn className="flex-1" loading={saving}>Submit for Approval</PBtn>
+      </div>
+    </form>
   );
 }
 
@@ -954,6 +1043,7 @@ function RepDashboard(){
         <div className="flex items-center gap-2">
           {duePoints>0&&<span className="text-xs font-bold px-2 py-1 rounded-lg text-gray-900" style={{background:GOLD}}>⭐ {fmt.number(duePoints)} pts due</span>}
           {pendingInv.length>0&&<span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-lg">📦 {pendingInv.length} to confirm</span>}
+          <button onClick={logout} className="flex items-center gap-1 text-xs font-semibold text-white px-3 py-1.5 rounded-lg" style={{background:NAVY}}>🚪</button>
         </div>
       </header>
       <main className="px-4 py-5 max-w-lg mx-auto">
