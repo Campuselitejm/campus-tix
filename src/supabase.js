@@ -1,5 +1,5 @@
-export const SUPABASE_URL = 'https://hadpvqnosakaegvrbevv.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhZHB2cW5vc2FrYWVndnJiZXZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxNDc0OTEsImV4cCI6MjA5NzcyMzQ5MX0.npcgc7-5wEE8mcYUUnU_SXp8tWVPT9VUXqxf5oFY9cI';
+export const SUPABASE_URL = 'https://pmnqnqvvudslifaxzemt.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtbnFucXZ2dWRzbGlmYXh6ZW10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDIwMDksImV4cCI6MjA5NzkxODAwOX0.o870ExdfTSotDXA94s-l7-8IHnBnGBO6O-HaR00t1EM';
 
 const H = {
   'Content-Type': 'application/json',
@@ -38,7 +38,7 @@ export const eventsDB = {
   closeOut: async (id,amountPaid) => {
     const r=await api('PATCH','ct_events',{status:'Closed',amount_paid_to_promoter:amountPaid},`?id=eq.${id}`);
     // Mark all coordinator commissions as Due
-    await api('PATCH','ct_coordinator_commissions',{status:'Due'},`?event_id=eq.${id}&status=eq.Pending`);
+    await api('PATCH','ct_coordinator_commissions',{status:'Due'},{},`?event_id=eq.${id}&status=eq.Pending`);
     return r[0]?cEvent(r[0]):null;
   },
 };
@@ -113,7 +113,7 @@ export const inventoryDB = {
       const ev=await eventsDB.getById(eventId);
       await inventoryDB.create({repId:toRepId,repName:toRepName,eventId,eventName:ev?.name||'',ticketsAllocated:qty});
     }
-    await api('PATCH','ct_return_inventory',{reassigned_to_rep_id:toRepId},`?rep_id=eq.${fromRepId}&event_id=eq.${eventId}&reassigned_to_rep_id=is.null`);
+    await api('PATCH','ct_return_inventory',{reassigned_to_rep_id:toRepId},{},`?rep_id=eq.${fromRepId}&event_id=eq.${eventId}&reassigned_to_rep_id=is.null`);
   },
 };
 
