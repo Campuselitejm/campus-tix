@@ -22,11 +22,25 @@ const cCoord = c => ({ id:c.id, coordinatorId:c.coordinator_id, name:c.name, pho
 const sCoord = c => ({ ...(c.coordinatorId&&{coordinator_id:c.coordinatorId}), ...(c.name&&{name:c.name}), ...(c.phone!==undefined&&{phone:c.phone}), ...(c.email&&{email:c.email}), ...(c.password&&{password:c.password}), ...(c.commissionRate!==undefined&&{commission_rate:c.commissionRate}), ...(c.status&&{status:c.status}), ...(c.mustChangePassword!==undefined&&{must_change_password:c.mustChangePassword}) });
 const cRep = r => ({ id:r.id, repId:r.rep_id, name:r.name, phone:r.phone, email:r.email, password:r.password, university:r.university, residentCommuter:r.resident_commuter, address:r.address, ceId:r.ce_id, status:r.status, mustChangePassword:r.must_change_password });
 const sRep = r => ({ ...(r.repId&&{rep_id:r.repId}), ...(r.name&&{name:r.name}), ...(r.phone!==undefined&&{phone:r.phone}), ...(r.email&&{email:r.email}), ...(r.password&&{password:r.password}), ...(r.university!==undefined&&{university:r.university}), ...(r.residentCommuter!==undefined&&{resident_commuter:r.residentCommuter}), ...(r.address!==undefined&&{address:r.address}), ...(r.ceId!==undefined&&{ce_id:r.ceId}), ...(r.status&&{status:r.status}), ...(r.mustChangePassword!==undefined&&{must_change_password:r.mustChangePassword}) });
-const cInv = i => ({ id:i.id, repId:i.rep_id, repName:i.rep_name, eventId:i.event_id, eventName:i.event_name, ticketsAllocated:i.tickets_allocated, ticketsSold:i.tickets_sold, ticketsRemaining:i.tickets_allocated-i.tickets_sold, ticketsReturned:i.tickets_returned||0, cashCollected:Number(i.cash_collected||0), confirmed:i.confirmed, confirmedAt:i.confirmed_at, status:i.status });
-const cSale = s => ({ id:s.id, repId:s.rep_id, repName:s.rep_name, eventId:s.event_id, eventName:s.event_name, quantitySold:s.quantity_sold, ticketPrice:Number(s.ticket_price||0), totalValue:Number(s.total_value||0), paymentMethod:s.payment_method, dateSold:s.date_sold, weekNumber:s.week_number, customerName:s.customer_name, customerPhone:s.customer_phone, customerEmail:s.customer_email });
+const cInv = i => ({ id:i.id, repId:i.rep_id, repName:i.rep_name, eventId:i.event_id, eventName:i.event_name, ticketTypeId:i.ticket_type_id, ticketTypeName:i.ticket_type_name, ticketPrice:Number(i.ticket_price||0), pointsPerTicket:i.points_per_ticket||10, ticketsAllocated:i.tickets_allocated, ticketsSold:i.tickets_sold, ticketsRemaining:i.tickets_allocated-i.tickets_sold, ticketsReturned:i.tickets_returned||0, cashCollected:Number(i.cash_collected||0), confirmed:i.confirmed, confirmedAt:i.confirmed_at, status:i.status });
+const cSale = s => ({ id:s.id, repId:s.rep_id, repName:s.rep_name, eventId:s.event_id, eventName:s.event_name, ticketTypeId:s.ticket_type_id, ticketTypeName:s.ticket_type_name, quantitySold:s.quantity_sold, ticketPrice:Number(s.ticket_price||0), totalValue:Number(s.total_value||0), paymentMethod:s.payment_method, dateSold:s.date_sold, weekNumber:s.week_number, customerName:s.customer_name, customerPhone:s.customer_phone, customerEmail:s.customer_email });
 const cCE = c => ({ id:c.id, repId:c.rep_id, repName:c.rep_name, eventId:c.event_id, eventName:c.event_name, pointsPerTicket:c.points_per_ticket, ticketsSold:c.tickets_sold, pointsEarned:c.points_earned, status:c.status, paidAt:c.paid_at, paidBy:c.paid_by, ceId:c.ce_id });
 const cCC = c => ({ id:c.id, coordinatorId:c.coordinator_id, coordinatorName:c.coordinator_name, eventId:c.event_id, eventName:c.event_name, commissionRate:Number(c.commission_rate||0), revenueBase:Number(c.revenue_base||0), amountDue:Number(c.amount_due||0), status:c.status, paidAt:c.paid_at, paidBy:c.paid_by });
 const cReturn = r => ({ id:r.id, repId:r.rep_id, repName:r.rep_name, eventId:r.event_id, coordinatorId:r.coordinator_id, ticketsReturned:r.tickets_returned, returnedAt:r.returned_at, notes:r.notes, reassignedToRepId:r.reassigned_to_rep_id });
+
+
+// ─── TICKET TYPES ─────────────────────────────────────────────
+const cTT = t => ({ id:t.id, eventId:t.event_id, eventName:t.event_name, name:t.name, price:Number(t.price||0), totalQuantity:t.total_quantity, pointsPerTicket:t.points_per_ticket||10, status:t.status });
+const sTT = t => ({ ...(t.eventId&&{event_id:t.eventId}), ...(t.eventName&&{event_name:t.eventName}), ...(t.name&&{name:t.name}), ...(t.price!==undefined&&{price:t.price}), ...(t.totalQuantity!==undefined&&{total_quantity:t.totalQuantity}), ...(t.pointsPerTicket!==undefined&&{points_per_ticket:t.pointsPerTicket}), ...(t.status&&{status:t.status}) });
+
+export const ticketTypesDB = {
+  getAll: async () => (await api('GET','ct_ticket_types',null,'?order=price.desc')).map(cTT),
+  getByEvent: async eventId => (await api('GET','ct_ticket_types',null,`?event_id=eq.${eventId}&order=price.desc`)).map(cTT),
+  getById: async id => { const r=await api('GET','ct_ticket_types',null,`?id=eq.${id}`); return r[0]?cTT(r[0]):null; },
+  create: async data => { const r=await api('POST','ct_ticket_types',sTT(data)); return r[0]?cTT(r[0]):null; },
+  update: async (id,data) => { const r=await api('PATCH','ct_ticket_types',sTT(data),`?id=eq.${id}`); return r[0]?cTT(r[0]):null; },
+  delete: async id => api('DELETE','ct_ticket_types',null,`?id=eq.${id}`),
+};
 
 // ─── EVENTS ──────────────────────────────────────────────────
 export const eventsDB = {
@@ -80,7 +94,7 @@ export const inventoryDB = {
   getByEvent: async eventId => (await api('GET','ct_rep_inventory',null,`?event_id=eq.${eventId}&order=rep_name.asc`)).map(cInv),
   getByRepAndEvent: async (repId,eventId) => { const r=await api('GET','ct_rep_inventory',null,`?rep_id=eq.${repId}&event_id=eq.${eventId}`); return r[0]?cInv(r[0]):null; },
   getActiveForRep: async repId => (await api('GET','ct_rep_inventory',null,`?rep_id=eq.${repId}&confirmed=eq.true&status=eq.Active`)).map(cInv),
-  create: async data => { const r=await api('POST','ct_rep_inventory',{rep_id:data.repId,rep_name:data.repName,event_id:data.eventId,event_name:data.eventName,tickets_allocated:data.ticketsAllocated,tickets_sold:0,tickets_returned:0,cash_collected:0,confirmed:false,status:'Active'}); return r[0]?cInv(r[0]):null; },
+  create: async data => { const r=await api('POST','ct_rep_inventory',{rep_id:data.repId,rep_name:data.repName,event_id:data.eventId,event_name:data.eventName,ticket_type_id:data.ticketTypeId||null,ticket_type_name:data.ticketTypeName||null,ticket_price:data.ticketPrice||0,points_per_ticket:data.pointsPerTicket||10,tickets_allocated:data.ticketsAllocated,tickets_sold:0,tickets_returned:0,cash_collected:0,confirmed:false,status:'Active'}); return r[0]?cInv(r[0]):null; },
   confirm: async id => { const r=await api('PATCH','ct_rep_inventory',{confirmed:true,confirmed_at:new Date().toISOString()},`?id=eq.${id}`); return r[0]?cInv(r[0]):null; },
   recordSale: async (id,qty,cash) => {
     const inv=await api('GET','ct_rep_inventory',null,`?id=eq.${id}`);
@@ -125,10 +139,10 @@ export const salesDB = {
   create: async data => {
     const now=new Date();
     const weekNum=Math.ceil(((now-new Date(now.getFullYear(),0,1))/86400000+1)/7);
-    const r=await api('POST','ct_sales',{rep_id:data.repId,rep_name:data.repName,event_id:data.eventId,event_name:data.eventName,quantity_sold:data.quantitySold,ticket_price:data.ticketPrice,total_value:data.totalValue,payment_method:data.paymentMethod,date_sold:now.toISOString(),week_number:weekNum,customer_name:data.customerName||null,customer_phone:data.customerPhone||null,customer_email:data.customerEmail||null});
+    const r=await api('POST','ct_sales',{rep_id:data.repId,rep_name:data.repName,event_id:data.eventId,event_name:data.eventName,ticket_type_id:data.ticketTypeId||null,ticket_type_name:data.ticketTypeName||null,quantity_sold:data.quantitySold,ticket_price:data.ticketPrice,total_value:data.totalValue,payment_method:data.paymentMethod,date_sold:now.toISOString(),week_number:weekNum,customer_name:data.customerName||null,customer_phone:data.customerPhone||null,customer_email:data.customerEmail||null});
     if(r[0]){
       await inventoryDB.recordSale(data.inventoryId,data.quantitySold,data.totalValue);
-      await cePointsDB.addSale(data.repId,data.eventId,data.eventName,data.quantitySold,data.pointsPerTicket,data.repName,data.ceId);
+      await cePointsDB.addSale(data.repId,data.eventId,data.eventName,data.quantitySold,data.pointsPerTicket,data.repName,data.ceId,data.ticketTypeId,data.ticketTypeName);
     }
     return r[0]?cSale(r[0]):null;
   },
@@ -139,20 +153,22 @@ export const cePointsDB = {
   getAll: async () => (await api('GET','ct_ce_points',null,'?order=created_at.desc')).map(cCE),
   getByRep: async repId => (await api('GET','ct_ce_points',null,`?rep_id=eq.${repId}&order=created_at.desc`)).map(cCE),
   getByEvent: async eventId => (await api('GET','ct_ce_points',null,`?event_id=eq.${eventId}&order=rep_name.asc`)).map(cCE),
-  getOrCreate: async (repId,repName,eventId,eventName,pointsPerTicket,ceId) => {
-    const ex=await api('GET','ct_ce_points',null,`?rep_id=eq.${repId}&event_id=eq.${eventId}`);
+  getOrCreate: async (repId,repName,eventId,eventName,pointsPerTicket,ceId,ticketTypeId,ticketTypeName) => {
+    const q=ticketTypeId?`?rep_id=eq.${repId}&event_id=eq.${eventId}&ticket_type_id=eq.${ticketTypeId}`:`?rep_id=eq.${repId}&event_id=eq.${eventId}&ticket_type_id=is.null`;
+    const ex=await api('GET','ct_ce_points',null,q);
     if(ex[0])return cCE(ex[0]);
-    const r=await api('POST','ct_ce_points',{rep_id:repId,rep_name:repName,event_id:eventId,event_name:eventName,points_per_ticket:pointsPerTicket,tickets_sold:0,points_earned:0,status:'Pending',ce_id:ceId});
+    const r=await api('POST','ct_ce_points',{rep_id:repId,rep_name:repName,event_id:eventId,event_name:eventName,ticket_type_id:ticketTypeId||null,ticket_type_name:ticketTypeName||null,points_per_ticket:pointsPerTicket,tickets_sold:0,points_earned:0,status:'Pending',ce_id:ceId});
     return r[0]?cCE(r[0]):null;
   },
-  addSale: async (repId,eventId,eventName,qty,ppt,repName,ceId) => {
-    const ex=await api('GET','ct_ce_points',null,`?rep_id=eq.${repId}&event_id=eq.${eventId}`);
+  addSale: async (repId,eventId,eventName,qty,ppt,repName,ceId,ticketTypeId,ticketTypeName) => {
+    const q=ticketTypeId?`?rep_id=eq.${repId}&event_id=eq.${eventId}&ticket_type_id=eq.${ticketTypeId}`:`?rep_id=eq.${repId}&event_id=eq.${eventId}&ticket_type_id=is.null`;
+    const ex=await api('GET','ct_ce_points',null,q);
     if(ex[0]){
       const newSold=ex[0].tickets_sold+qty;
       const r=await api('PATCH','ct_ce_points',{tickets_sold:newSold,points_earned:newSold*ex[0].points_per_ticket},`?id=eq.${ex[0].id}`);
       return r[0]?cCE(r[0]):null;
     } else {
-      return cePointsDB.getOrCreate(repId,repName,eventId,eventName,ppt,ceId);
+      return cePointsDB.getOrCreate(repId,repName,eventId,eventName,ppt,ceId,ticketTypeId,ticketTypeName);
     }
   },
   markPaid: async (id,paidBy) => { const r=await api('PATCH','ct_ce_points',{status:'Paid',paid_at:new Date().toISOString(),paid_by:paidBy},`?id=eq.${id}`); return r[0]?cCE(r[0]):null; },
