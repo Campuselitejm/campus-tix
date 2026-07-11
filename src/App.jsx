@@ -390,8 +390,6 @@ function AdminEvents(){
     return[
       <div><p className="font-semibold text-sm text-gray-900">{e.name}</p><p className="text-xs text-gray-400">{fmt.date(e.date)}</p></div>,
       <span className="text-sm text-gray-600">{e.venue||"—"}</span>,
-      <span className="font-bold">{fmt.currency(e.ticketPrice)}</span>,
-      <span className="text-sm">{e.totalTickets}</span>,
       <span className="font-bold text-emerald-600">{fmt.currency(rev)}</span>,
       <span className="text-sm text-blue-600">{fmt.currency(cut)}</span>,
       <EventStatusBadge status={e.status}/>,
