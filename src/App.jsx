@@ -238,11 +238,11 @@ function AdminDashboard({setPage}){
 
 // ─── ADMIN EVENTS ─────────────────────────────────────────────
 function EventForm({initial,onSave,onClose,saving}){
-  const[form,setForm]=useState(initial||{name:"",date:"",venue:"",promoterName:"",promoterPhone:"",ticketPrice:"",totalTickets:"",commissionRate:"10",pointsPerTicket:"10",status:"Draft"});
+  const[form,setForm]=useState(initial||{name:"",date:"",venue:"",promoterName:"",promoterPhone:"",commissionRate:"10",status:"Draft"});
   const[errors,setErrors]=useState({});
   const isEdit=!!initial?.id;
-  const validate=()=>{const e={};if(!form.name.trim())e.name="Required";if(!form.date)e.date="Required";if(!form.ticketPrice||Number(form.ticketPrice)<=0)e.ticketPrice="Required";if(!form.totalTickets||Number(form.totalTickets)<=0)e.totalTickets="Required";setErrors(e);return!Object.keys(e).length;};
-  const submit=e=>{e.preventDefault();if(!validate())return;onSave({...form,ticketPrice:Number(form.ticketPrice),totalTickets:Number(form.totalTickets),commissionRate:Number(form.commissionRate)/100,pointsPerTicket:Number(form.pointsPerTicket)});};
+  const validate=()=>{const e={};if(!form.name.trim())e.name="Required";if(!form.date)e.date="Required";setErrors(e);return!Object.keys(e).length;};
+  const submit=e=>{e.preventDefault();if(!validate())return;onSave({...form,ticketPrice:0,totalTickets:0,commissionRate:Number(form.commissionRate)/100,pointsPerTicket:10});};
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   return(
     <form onSubmit={submit} className="space-y-4">
@@ -255,14 +255,10 @@ function EventForm({initial,onSave,onClose,saving}){
         <FF label="Promoter Name"><input className={iCls} value={form.promoterName} onChange={e=>set("promoterName",e.target.value)} placeholder="Promoter name"/></FF>
         <FF label="Promoter Phone" hint="Tap to open WhatsApp"><input className={iCls} type="tel" value={form.promoterPhone} onChange={e=>set("promoterPhone",e.target.value)} placeholder="+1 876-555-0000"/></FF>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <FF label="Ticket Price ($)" required error={errors.ticketPrice}><input className={iCls} type="number" min="0" step="0.01" value={form.ticketPrice} onChange={e=>set("ticketPrice",e.target.value)} placeholder="0.00"/></FF>
-        <FF label="Total Tickets" required error={errors.totalTickets}><input className={iCls} type="number" min="1" value={form.totalTickets} onChange={e=>set("totalTickets",e.target.value)} placeholder="0"/></FF>
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+        💡 Ticket prices and CE points are set per ticket type after creating the event. Tap the 🎟️ button on the event to add ticket types.
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <FF label="Campus Tix Commission %" hint="Default 10%"><input className={iCls} type="number" min="0" max="100" value={form.commissionRate} onChange={e=>set("commissionRate",e.target.value)} placeholder="10"/></FF>
-        <FF label="CE Points per Ticket" hint="Default 10"><input className={iCls} type="number" min="1" value={form.pointsPerTicket} onChange={e=>set("pointsPerTicket",e.target.value)} placeholder="10"/></FF>
-      </div>
+      <FF label="Campus Tix Commission %" hint="% of gross revenue Campus Tix keeps (default 10%)"><input className={iCls} type="number" min="0" max="100" value={form.commissionRate} onChange={e=>set("commissionRate",e.target.value)} placeholder="10"/></FF>
       {isEdit&&<FF label="Status"><select className={iCls} value={form.status} onChange={e=>set("status",e.target.value)}><option>Draft</option><option>Active</option></select></FF>}
       <div className="flex gap-3 pt-1"><button type="button" onClick={onClose} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving}>{isEdit?"Save Changes":"Create Event"}</PBtn></div>
     </form>
@@ -414,7 +410,7 @@ function AdminEvents(){
       <SHeader title="Events" subtitle={`${events.length} events`} action={<PBtn onClick={()=>setModal({type:"create"})}>➕ New Event</PBtn>}/>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Search events..."/></div>
-        <Table headers={["Event","Venue","Ticket Price","Total Tix","Revenue","CT Cut","Status","Actions"]} rows={rows} loading={loading} empty="No events yet"/>
+        <Table headers={["Event","Venue","Revenue","CT Cut","Status","Actions"]} rows={rows} loading={loading} empty="No events yet"/>
       </div>
       <Modal isOpen={modal?.type==="create"||modal?.type==="edit"} onClose={()=>setModal(null)} title={modal?.type==="edit"?`Edit: ${modal.event?.name}`:"Create Event"} size="lg">
         <EventForm initial={modal?.event} onSave={save} onClose={()=>setModal(null)} saving={saving}/>
@@ -429,9 +425,8 @@ function AdminEvents(){
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Date</p><p className="font-semibold text-sm">{fmt.date(modal.event.date)}</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Venue</p><p className="font-semibold text-sm">{modal.event.venue||"—"}</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Promoter</p><p className="font-semibold text-sm">{modal.event.promoterName||"—"}</p>{modal.event.promoterPhone&&<WhatsAppBtn phone={modal.event.promoterPhone}/>}</div>
-              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Ticket Price</p><p className="font-semibold text-sm">{fmt.currency(modal.event.ticketPrice)}</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Commission Rate</p><p className="font-semibold text-sm">{Math.round(modal.event.commissionRate*100)}%</p></div>
-              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">CE Points/Ticket</p><p className="font-semibold text-sm">{modal.event.pointsPerTicket} pts</p></div>
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Ticket Types</p><TicketTypeSummary eventId={modal.event.id}/></div>
             </div>
             {modal.event.amountPaidToPromoter>0&&<div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3"><p className="text-xs text-emerald-600 font-semibold">Amount Paid to Promoter</p><p className="text-lg font-bold text-emerald-800">{fmt.currency(modal.event.amountPaidToPromoter)}</p></div>}
             <div className="space-y-2">{(modal.sales||[]).slice(0,5).map((s,i)=>(<div key={i} className="flex justify-between items-center p-2 bg-gray-50 rounded-xl"><div><p className="text-xs font-semibold">{s.repName}</p><p className="text-xs text-gray-400">{fmt.dateTime(s.dateSold)}</p></div><span className="text-sm font-bold text-emerald-600">{fmt.currency(s.totalValue)}</span></div>))}</div>
@@ -633,6 +628,15 @@ function AdminReps(){
   );
 }
 
+
+
+// ─── TICKET TYPE SUMMARY (inline) ────────────────────────────
+function TicketTypeSummary({eventId}){
+  const{data:types=[],loading}=useAsync(()=>ticketTypesDB.getByEvent(eventId),[eventId]);
+  if(loading)return <span className="text-xs text-gray-400">Loading...</span>;
+  if(!types.length)return <span className="text-xs text-gray-400">None added yet</span>;
+  return <div className="space-y-0.5">{types.map(t=><p key={t.id} className="text-xs font-semibold">{t.name}: {fmt.currency(t.price)}</p>)}</div>;
+}
 
 // ─── TICKET TYPE SELECTOR ────────────────────────────────────
 function TicketTypeSelector({eventId,value,onChange}){
@@ -1214,7 +1218,7 @@ function RepLogSale({repInfo,onSuccess}){
     if(selectedInv&&Number(form.qty)>selectedInv.ticketsRemaining){setError(`Only ${selectedInv.ticketsRemaining} tickets remaining`);return;}
     setLoading(true);
     try{
-      const pricePerTix=selectedInv.ticketPrice||selectedEvent?.ticketPrice||0;
+      const pricePerTix=selectedInv.ticketPrice||0;
       const pptRate=selectedInv.pointsPerTicket||selectedEvent?.pointsPerTicket||10;
       const total=Number(form.qty)*pricePerTix;
       const pointsEarned=Number(form.qty)*pptRate;
