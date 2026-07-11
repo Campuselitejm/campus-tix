@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from "react";
-import { eventsDB, coordinatorsDB, coordEventsDB, repsDB, inventoryDB, salesDB, cePointsDB, coordCommissionsDB, returnInventoryDB, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.js";
+import { eventsDB, coordinatorsDB, coordEventsDB, repsDB, inventoryDB, salesDB, cePointsDB, coordCommissionsDB, returnInventoryDB, ticketTypesDB, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.js";
 
 // ─── ERROR BOUNDARY ──────────────────────────────────────────
 class ErrorBoundary extends React.Component {
@@ -269,6 +269,99 @@ function EventForm({initial,onSave,onClose,saving}){
   );
 }
 
+// ─── TICKET TYPES MANAGER ────────────────────────────────────
+function TicketTypesManager({event,onClose}){
+  const{data:types=[],loading,reload}=useAsync(()=>ticketTypesDB.getByEvent(event.id),[event.id]);
+  const[form,setForm]=useState({name:"",price:"",totalQuantity:"",pointsPerTicket:"10"});
+  const[errors,setErrors]=useState({});
+  const[saving,setSaving]=useState(false);
+  const[editModal,setEditModal]=useState(null);
+  const{toast,show}=useToast();
+
+  const validate=()=>{const e={};if(!form.name.trim())e.name="Required";if(!form.price||Number(form.price)<=0)e.price="Required";if(!form.totalQuantity||Number(form.totalQuantity)<=0)e.totalQuantity="Required";setErrors(e);return!Object.keys(e).length;};
+
+  const addType=async()=>{
+    if(!validate())return;
+    setSaving(true);
+    try{
+      await ticketTypesDB.create({eventId:event.id,eventName:event.name,name:form.name,price:Number(form.price),totalQuantity:Number(form.totalQuantity),pointsPerTicket:Number(form.pointsPerTicket)||10});
+      show("Ticket type added!");
+      setForm({name:"",price:"",totalQuantity:"",pointsPerTicket:"10"});
+      reload();
+    }catch(e){show("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  return(
+    <div className="space-y-4">
+      <div className="p-3 rounded-xl text-white text-sm font-semibold" style={{background:NAVY}}>{event.name}</div>
+
+      {/* Add new type */}
+      <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+        <p className="text-sm font-bold text-gray-700">Add Ticket Type</p>
+        <div className="grid grid-cols-2 gap-3">
+          <FF label="Type Name" required error={errors.name}>
+            <input className={iCls} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. VIP, General"/>
+          </FF>
+          <FF label="Price ($)" required error={errors.price}>
+            <input className={iCls} type="number" min="0" step="0.01" value={form.price} onChange={e=>set("price",e.target.value)} placeholder="0.00"/>
+          </FF>
+          <FF label="Total Qty" required error={errors.totalQuantity}>
+            <input className={iCls} type="number" min="1" value={form.totalQuantity} onChange={e=>set("totalQuantity",e.target.value)} placeholder="0"/>
+          </FF>
+          <FF label="CE Points/Ticket" hint="Points per ticket sold">
+            <input className={iCls} type="number" min="1" value={form.pointsPerTicket} onChange={e=>set("pointsPerTicket",e.target.value)} placeholder="10"/>
+          </FF>
+        </div>
+        <PBtn className="w-full" loading={saving} onClick={addType}>➕ Add Ticket Type</PBtn>
+      </div>
+
+      {/* Existing types */}
+      {loading?<div className="h-20 bg-gray-50 rounded-xl animate-pulse"/>:(
+        <div className="space-y-2">
+          {types.map(t=>(
+            <div key={t.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+              <div>
+                <p className="font-bold text-sm text-gray-900">{t.name}</p>
+                <p className="text-xs text-gray-400">{fmt.currency(t.price)} · {t.totalQuantity} tickets · ⭐ {t.pointsPerTicket} pts</p>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={()=>setEditModal(t)} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 text-xs flex items-center justify-center">✏️</button>
+                <button onClick={async()=>{await ticketTypesDB.delete(t.id);show("Deleted");reload();}} className="w-7 h-7 rounded-lg bg-red-50 text-red-600 text-xs flex items-center justify-center">🗑️</button>
+              </div>
+            </div>
+          ))}
+          {types.length===0&&<p className="text-sm text-gray-400 text-center py-4">No ticket types yet. Add at least one above.</p>}
+        </div>
+      )}
+
+      <Modal isOpen={!!editModal} onClose={()=>setEditModal(null)} title="Edit Ticket Type" size="sm">
+        {editModal&&<EditTicketTypeForm type={editModal} onSave={async form=>{await ticketTypesDB.update(editModal.id,form);show("Updated");setEditModal(null);reload();}} onClose={()=>setEditModal(null)}/>}
+      </Modal>
+
+      <button onClick={onClose} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Done</button>
+      <Toast message={toast.message} visible={toast.visible}/>
+    </div>
+  );
+}
+
+function EditTicketTypeForm({type,onSave,onClose}){
+  const[form,setForm]=useState({name:type.name,price:type.price,totalQuantity:type.totalQuantity,pointsPerTicket:type.pointsPerTicket});
+  const[saving,setSaving]=useState(false);
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  return(
+    <div className="space-y-3">
+      <FF label="Type Name"><input className={iCls} value={form.name} onChange={e=>set("name",e.target.value)}/></FF>
+      <FF label="Price ($)"><input className={iCls} type="number" min="0" step="0.01" value={form.price} onChange={e=>set("price",e.target.value)}/></FF>
+      <FF label="Total Qty"><input className={iCls} type="number" min="1" value={form.totalQuantity} onChange={e=>set("totalQuantity",e.target.value)}/></FF>
+      <FF label="CE Points/Ticket"><input className={iCls} type="number" min="1" value={form.pointsPerTicket} onChange={e=>set("pointsPerTicket",e.target.value)}/></FF>
+      <div className="flex gap-3"><button onClick={onClose} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving} onClick={async()=>{setSaving(true);await onSave({name:form.name,price:Number(form.price),totalQuantity:Number(form.totalQuantity),pointsPerTicket:Number(form.pointsPerTicket)});setSaving(false);}}>Save</PBtn></div>
+    </div>
+  );
+}
+
 function CloseOutEventModal({event,onClose,onConfirm,saving}){
   const[amount,setAmount]=useState("");
   return(
@@ -309,6 +402,7 @@ function AdminEvents(){
       <div className="flex gap-1">
         {e.promoterPhone&&<a href={waLink(e.promoterPhone)} target="_blank" rel="noreferrer" className="w-7 h-7 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 text-xs flex items-center justify-center" title="WhatsApp Promoter">📱</a>}
         {e.status!=="Closed"&&<button onClick={()=>setModal({type:"edit",event:e})} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs flex items-center justify-center" title="Edit">✏️</button>}
+        {e.status!=="Closed"&&<button onClick={()=>setModal({type:"tickets",event:e})} className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 text-xs flex items-center justify-center" title="Ticket Types">🎟️</button>}
         {e.status==="Draft"&&<button onClick={async()=>{await eventsDB.update(e.id,{status:"Active"});show("Event activated");reload();}} className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs flex items-center justify-center" title="Activate">▶️</button>}
         {e.status==="Active"&&<button onClick={()=>setModal({type:"closeout",event:e})} className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs flex items-center justify-center" title="Close Out">🔒</button>}
         <button onClick={()=>setModal({type:"detail",event:e,sales:eS})} className="w-7 h-7 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 text-xs flex items-center justify-center" title="View">👁️</button>
@@ -343,6 +437,9 @@ function AdminEvents(){
             <div className="space-y-2">{(modal.sales||[]).slice(0,5).map((s,i)=>(<div key={i} className="flex justify-between items-center p-2 bg-gray-50 rounded-xl"><div><p className="text-xs font-semibold">{s.repName}</p><p className="text-xs text-gray-400">{fmt.dateTime(s.dateSold)}</p></div><span className="text-sm font-bold text-emerald-600">{fmt.currency(s.totalValue)}</span></div>))}</div>
           </div>
         )}
+      </Modal>
+      <Modal isOpen={modal?.type==="tickets"} onClose={()=>setModal(null)} title="Manage Ticket Types" size="lg">
+        {modal?.event&&<TicketTypesManager event={modal.event} onClose={()=>setModal(null)}/>}
       </Modal>
       <Toast message={toast.message} visible={toast.visible}/>
     </div>
@@ -536,6 +633,26 @@ function AdminReps(){
   );
 }
 
+
+// ─── TICKET TYPE SELECTOR ────────────────────────────────────
+function TicketTypeSelector({eventId,value,onChange}){
+  const{data:types=[],loading}=useAsync(()=>ticketTypesDB.getByEvent(eventId),[eventId]);
+  if(loading)return <div className="h-12 bg-gray-50 rounded-xl animate-pulse"/>;
+  if(types.length===0)return(
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+      ⚠️ No ticket types for this event. Add ticket types from Events page first.
+    </div>
+  );
+  return(
+    <FF label="Ticket Type" required>
+      <select className={iCls} value={value||""} onChange={e=>{const tt=types.find(t=>t.id===e.target.value);onChange(tt||null);}}>
+        <option value="">Select ticket type...</option>
+        {types.map(t=><option key={t.id} value={t.id}>{t.name} — {fmt.currency(t.price)} · ⭐{t.pointsPerTicket}pts</option>)}
+      </select>
+    </FF>
+  );
+}
+
 // ─── ADMIN REP INVENTORY ──────────────────────────────────────
 function AdminRepInventory(){
   const{data:inventory=[],loading,reload}=useAsync(()=>inventoryDB.getAll());
@@ -550,6 +667,8 @@ function AdminRepInventory(){
   const rows=filtered.map(inv=>[
     <div><p className="font-semibold text-sm">{inv.repName}</p><p className="text-xs text-gray-400">{inv.repId}</p></div>,
     <span className="text-sm">{inv.eventName}</span>,
+    inv.ticketTypeName?<Badge label={inv.ticketTypeName} type="info"/>:<span className="text-xs text-gray-400">—</span>,
+    <span className="text-sm">{inv.ticketPrice>0?fmt.currency(inv.ticketPrice):"—"}</span>,
     <span className="font-semibold">{inv.ticketsAllocated}</span>,
     <span className="text-emerald-600 font-semibold">{inv.ticketsSold}</span>,
     <span className={`font-bold ${inv.ticketsRemaining===0?"text-red-600":inv.ticketsRemaining<=3?"text-amber-600":"text-gray-900"}`}>{inv.ticketsRemaining}</span>,
@@ -562,14 +681,20 @@ function AdminRepInventory(){
       <SHeader title="Rep Inventory" subtitle="Ticket allocations per rep per event" action={<PBtn onClick={()=>setModal({type:"allocate"})}>🎟️ Allocate Tickets</PBtn>}/>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="mb-4"><select className={iCls} value={filterEvent} onChange={e=>setFilterEvent(e.target.value)}><option value="">All Events</option>{events.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></div>
-        <Table headers={["Rep","Event","Allocated","Sold","Remaining","Cash Collected","Confirmed","Status"]} rows={rows} loading={loading} empty="No ticket inventory yet. Allocate tickets to reps."/>
+        <Table headers={["Rep","Event","Ticket Type","Price","Allocated","Sold","Remaining","Cash","Confirmed","Status"]} rows={rows} loading={loading} empty="No ticket inventory yet. Allocate tickets to reps."/>
       </div>
       <Modal isOpen={modal?.type==="allocate"} onClose={()=>setModal(null)} title="Allocate Tickets to Rep" size="md">
         <div className="space-y-4">
-          <FF label="Event" required><select className={iCls} value={allocForm.eventId||""} onChange={e=>setAllocForm(f=>({...f,eventId:e.target.value}))}><option value="">Select event...</option>{events.filter(e=>e.status==="Active").map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></FF>
+          <FF label="Event" required>
+              <select className={iCls} value={allocForm.eventId||""} onChange={e=>{setAllocForm(f=>({...f,eventId:e.target.value,ticketTypeId:"",ticketTypeName:"",ticketPrice:0,pointsPerTicket:10}));}}>
+                <option value="">Select event...</option>
+                {events.filter(e=>e.status==="Active").map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </FF>
+            {allocForm.eventId&&<TicketTypeSelector eventId={allocForm.eventId} value={allocForm.ticketTypeId} onChange={(tt)=>setAllocForm(f=>({...f,ticketTypeId:tt?.id||"",ticketTypeName:tt?.name||"",ticketPrice:tt?.price||0,pointsPerTicket:tt?.pointsPerTicket||10}))}/>}
           <FF label="Rep" required><select className={iCls} value={allocForm.repId} onChange={e=>{const rep=activeReps.find(r=>r.id===e.target.value);setAllocForm(f=>({...f,repId:e.target.value,repName:rep?.name,repRepId:rep?.repId}));}}><option value="">Select rep...</option>{activeReps.map(r=><option key={r.id} value={r.id}>{r.name} ({r.repId})</option>)}</select></FF>
           <FF label="Tickets to Allocate" required><input className={iCls} type="number" min="1" value={allocForm.qty} onChange={e=>setAllocForm(f=>({...f,qty:e.target.value}))} placeholder="0"/></FF>
-          <div className="flex gap-3"><button onClick={()=>setModal(null)} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving} onClick={async()=>{if(!allocForm.eventId||!allocForm.repId||!allocForm.qty){show("Fill all fields");return;}setSaving(true);try{const ev=events.find(e=>e.id===allocForm.eventId);await inventoryDB.create({repId:allocForm.repRepId,repName:allocForm.repName,eventId:allocForm.eventId,eventName:ev?.name||"",ticketsAllocated:Number(allocForm.qty)});await cePointsDB.getOrCreate(allocForm.repRepId,allocForm.repName,allocForm.eventId,ev?.name||"",ev?.pointsPerTicket||10,activeReps.find(r=>r.id===allocForm.repId)?.ceId||"");show("Tickets allocated!");setModal(null);setAllocForm({repId:"",qty:""});reload();}catch(e){show("Error: "+e.message);}setSaving(false);}}>Allocate Tickets</PBtn></div>
+          <div className="flex gap-3"><button onClick={()=>setModal(null)} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving} onClick={async()=>{if(!allocForm.eventId||!allocForm.repId||!allocForm.qty){show("Fill all fields");return;}setSaving(true);try{const ev=events.find(e=>e.id===allocForm.eventId);const rep=activeReps.find(r=>r.id===allocForm.repId);await inventoryDB.create({repId:allocForm.repRepId,repName:allocForm.repName,eventId:allocForm.eventId,eventName:ev?.name||"",ticketTypeId:allocForm.ticketTypeId||null,ticketTypeName:allocForm.ticketTypeName||null,ticketPrice:allocForm.ticketPrice||ev?.ticketPrice||0,pointsPerTicket:allocForm.pointsPerTicket||ev?.pointsPerTicket||10,ticketsAllocated:Number(allocForm.qty)});await cePointsDB.getOrCreate(allocForm.repRepId,allocForm.repName,allocForm.eventId,ev?.name||"",allocForm.pointsPerTicket||10,rep?.ceId||"",allocForm.ticketTypeId||null,allocForm.ticketTypeName||null);show("Tickets allocated!");setModal(null);setAllocForm({repId:"",qty:""});reload();}catch(e){show("Error: "+e.message);}setSaving(false);}}>Allocate Tickets</PBtn></div>
         </div>
       </Modal>
       <Toast message={toast.message} visible={toast.visible}/>
@@ -853,6 +978,7 @@ function CoordEventDetail({event,coordId,coordName,onBack}){
                   </div>
                   <div className="flex flex-col items-end gap-1"><Badge label={inv.status} type={inv.status==="Active"?"success":"danger"}/>{inv.confirmed?<Badge label="Confirmed ✓" type="success"/>:<Badge label="Unconfirmed" type="warning"/>}</div>
                 </div>
+                {inv.ticketTypeName&&<div className="mb-2"><Badge label={inv.ticketTypeName} type="info"/><span className="text-xs text-gray-400 ml-2">{fmt.currency(inv.ticketPrice)} · ⭐{inv.pointsPerTicket}pts</span></div>}
                 <div className="grid grid-cols-3 gap-2 text-center mb-3">
                   <div className="bg-gray-50 rounded-xl p-2"><p className="text-xs text-gray-400">Allocated</p><p className="font-bold text-sm">{inv.ticketsAllocated}</p></div>
                   <div className="bg-emerald-50 rounded-xl p-2"><p className="text-xs text-gray-400">Sold</p><p className="font-bold text-sm text-emerald-600">{inv.ticketsSold}</p></div>
@@ -931,9 +1057,9 @@ function CoordEventDetail({event,coordId,coordName,onBack}){
             const ce=cePoints.find(p=>p.repId===inv.repId);
             return(
               <div key={inv.id} className="bg-white rounded-xl border border-gray-100 p-3">
-                <p className="font-semibold text-sm mb-2">{inv.repName}</p>
+                <div className="flex items-center gap-2 mb-2"><p className="font-semibold text-sm">{inv.repName}</p>{inv.ticketTypeName&&<Badge label={inv.ticketTypeName} type="info"/>}</div>
                 <div className="grid grid-cols-2 gap-1 text-xs">
-                  {[["Allocated",inv.ticketsAllocated],["Sold",inv.ticketsSold],["Returned",inv.ticketsReturned],["Cash Collected",fmt.currency(inv.cashCollected)],["CE Points",`${ce?.pointsEarned||0} pts`],["CE Status",ce?.status||"—"]].map(([l,v])=><div key={l} className="flex justify-between py-1"><span className="text-gray-400">{l}</span><span className="font-semibold">{v}</span></div>)}
+                  {[["Ticket Price",inv.ticketPrice>0?fmt.currency(inv.ticketPrice):"—"],["Allocated",inv.ticketsAllocated],["Sold",inv.ticketsSold],["Returned",inv.ticketsReturned],["Cash Collected",fmt.currency(inv.cashCollected)],["CE Points",`${ce?.pointsEarned||0} pts`],["CE Status",ce?.status||"—"]].map(([l,v])=><div key={l} className="flex justify-between py-1"><span className="text-gray-400">{l}</span><span className="font-semibold">{v}</span></div>)}
                 </div>
               </div>
             );
@@ -943,9 +1069,10 @@ function CoordEventDetail({event,coordId,coordName,onBack}){
 
       <Modal isOpen={modal==="allocate"} onClose={()=>setModal(null)} title="Allocate Tickets to Rep" size="sm">
         <div className="space-y-4">
+          <TicketTypeSelector eventId={event.id} value={allocForm.ticketTypeId||""} onChange={(tt)=>setAllocForm(f=>({...f,ticketTypeId:tt?.id||null,ticketTypeName:tt?.name||null,ticketPrice:tt?.price||0,pointsPerTicket:tt?.pointsPerTicket||10}))}/>
           <FF label="Rep" required><select className={iCls} value={allocForm.repId} onChange={e=>{const r=allReps.find(x=>x.id===e.target.value);setAllocForm(f=>({...f,repId:e.target.value,repName:r?.name,repRepId:r?.repId,repCeId:r?.ceId}));}}><option value="">Select rep...</option>{allReps.filter(r=>r.status==="Active").map(r=><option key={r.id} value={r.id}>{r.name} ({r.repId})</option>)}</select></FF>
           <FF label="Tickets to Allocate" required><input className={iCls} type="number" min="1" value={allocForm.qty} onChange={e=>setAllocForm(f=>({...f,qty:e.target.value}))} placeholder="0"/></FF>
-          <div className="flex gap-3"><button onClick={()=>setModal(null)} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving==="alloc"} onClick={async()=>{if(!allocForm.repId||!allocForm.qty){show("Fill all fields");return;}setSaving("alloc");try{await inventoryDB.create({repId:allocForm.repRepId,repName:allocForm.repName,eventId:event.id,eventName:event.name,ticketsAllocated:Number(allocForm.qty)});await cePointsDB.getOrCreate(allocForm.repRepId,allocForm.repName,event.id,event.name,event.pointsPerTicket,allocForm.repCeId||"");show("Tickets allocated!");setModal(null);setAllocForm({repId:"",qty:""});reloadInv();reloadCE();}catch(e){show("Error: "+e.message);}setSaving(null);}}>Allocate</PBtn></div>
+          <div className="flex gap-3"><button onClick={()=>setModal(null)} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button><PBtn className="flex-1" loading={saving==="alloc"} onClick={async()=>{if(!allocForm.repId||!allocForm.qty){show("Fill all fields");return;}setSaving("alloc");try{await inventoryDB.create({repId:allocForm.repRepId,repName:allocForm.repName,eventId:event.id,eventName:event.name,ticketTypeId:allocForm.ticketTypeId||null,ticketTypeName:allocForm.ticketTypeName||null,ticketPrice:allocForm.ticketPrice||event.ticketPrice||0,pointsPerTicket:allocForm.pointsPerTicket||event.pointsPerTicket||10,ticketsAllocated:Number(allocForm.qty)});await cePointsDB.getOrCreate(allocForm.repRepId,allocForm.repName,event.id,event.name,allocForm.pointsPerTicket||event.pointsPerTicket||10,allocForm.repCeId||"",allocForm.ticketTypeId||null,allocForm.ticketTypeName||null);show("Tickets allocated!");setModal(null);setAllocForm({repId:"",qty:""});reloadInv();reloadCE();}catch(e){show("Error: "+e.message);}setSaving(null);}}>Allocate</PBtn></div>
         </div>
       </Modal>
 
@@ -1087,10 +1214,12 @@ function RepLogSale({repInfo,onSuccess}){
     if(selectedInv&&Number(form.qty)>selectedInv.ticketsRemaining){setError(`Only ${selectedInv.ticketsRemaining} tickets remaining`);return;}
     setLoading(true);
     try{
-      const total=Number(form.qty)*(selectedEvent?.ticketPrice||0);
-      const pointsEarned=Number(form.qty)*(selectedEvent?.pointsPerTicket||10);
-      await salesDB.create({repId:repInfo.repId,repName:repInfo.name,eventId:selectedInv.eventId,eventName:selectedInv.eventName,quantitySold:Number(form.qty),ticketPrice:selectedEvent?.ticketPrice||0,totalValue:total,paymentMethod:form.paymentMethod,inventoryId:form.invId,pointsPerTicket:selectedEvent?.pointsPerTicket||10,ceId:repInfo.ceId});
-      setConfirmation({qty:Number(form.qty),total,pointsEarned,remaining:selectedInv.ticketsRemaining-Number(form.qty),eventName:selectedInv.eventName});
+      const pricePerTix=selectedInv.ticketPrice||selectedEvent?.ticketPrice||0;
+      const pptRate=selectedInv.pointsPerTicket||selectedEvent?.pointsPerTicket||10;
+      const total=Number(form.qty)*pricePerTix;
+      const pointsEarned=Number(form.qty)*pptRate;
+      await salesDB.create({repId:repInfo.repId,repName:repInfo.name,eventId:selectedInv.eventId,eventName:selectedInv.eventName,ticketTypeId:selectedInv.ticketTypeId||null,ticketTypeName:selectedInv.ticketTypeName||null,quantitySold:Number(form.qty),ticketPrice:pricePerTix,totalValue:total,paymentMethod:form.paymentMethod,inventoryId:form.invId,pointsPerTicket:pptRate,ceId:repInfo.ceId});
+      setConfirmation({qty:Number(form.qty),total,pointsEarned,remaining:selectedInv.ticketsRemaining-Number(form.qty),eventName:selectedInv.eventName,ticketTypeName:selectedInv.ticketTypeName||null});
       onSuccess();
     }catch(e){setError("Error: "+e.message);}
     setLoading(false);
@@ -1102,6 +1231,7 @@ function RepLogSale({repInfo,onSuccess}){
       <p className="text-gray-500 text-sm mb-6">Saved instantly</p>
       <div className="bg-gray-50 rounded-2xl p-5 text-left mb-6 space-y-3">
         <div className="flex justify-between"><span className="text-sm text-gray-500">Event</span><span className="text-sm font-semibold">{confirmation.eventName}</span></div>
+        {confirmation.ticketTypeName&&<div className="flex justify-between"><span className="text-sm text-gray-500">Ticket Type</span><Badge label={confirmation.ticketTypeName} type="info"/></div>}
         <div className="flex justify-between"><span className="text-sm text-gray-500">Tickets Sold</span><span className="text-sm font-semibold">{confirmation.qty}</span></div>
         <div className="flex justify-between"><span className="text-sm text-gray-500">Total Collected</span><span className="text-lg font-bold text-emerald-600">{fmt.currency(confirmation.total)}</span></div>
         <div className="flex justify-between border-t border-gray-200 pt-3"><span className="text-sm font-semibold text-gray-600">CE Points Earned</span><span className="text-base font-bold text-yellow-600">⭐ {fmt.number(confirmation.pointsEarned)} pts</span></div>
@@ -1114,15 +1244,20 @@ function RepLogSale({repInfo,onSuccess}){
     <form onSubmit={submit} className="space-y-4">
       <div className="p-4 rounded-2xl text-white" style={{background:NAVY}}><p className="text-xs font-semibold opacity-75">Logging as</p><p className="text-lg font-bold">{repInfo?.name}</p><p className="text-xs opacity-75">{repInfo?.repId}</p></div>
       {error&&<div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">⚠️ {error}</div>}
-      <FF label="Select Event" required>
+      <FF label="Select Event & Ticket Type" required>
         {il?<div className="h-12 bg-gray-50 rounded-xl animate-pulse"/>:(
           <select className={iCls} value={form.invId} onChange={e=>set("invId",e.target.value)}>
-            <option value="">Choose event...</option>
-            {activeInv.map(i=><option key={i.id} value={i.id}>{i.eventName} ({i.ticketsRemaining} remaining)</option>)}
+            <option value="">Choose...</option>
+            {activeInv.map(i=><option key={i.id} value={i.id}>{i.eventName}{i.ticketTypeName?` — ${i.ticketTypeName}`:""} ({i.ticketsRemaining} remaining)</option>)}
           </select>
         )}
       </FF>
-      {selectedInv&&<div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3"><div className="flex justify-between items-center"><span className="text-xs font-semibold text-yellow-700">Tickets Remaining</span><span className="font-bold text-yellow-800">{selectedInv.ticketsRemaining}</span></div>{selectedEvent&&<div className="flex justify-between items-center mt-1"><span className="text-xs font-semibold text-yellow-700">Price per ticket</span><span className="font-bold text-yellow-800">{fmt.currency(selectedEvent.ticketPrice)}</span></div>}</div>}
+      {selectedInv&&<div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-1">
+        {selectedInv.ticketTypeName&&<div className="flex justify-between items-center"><span className="text-xs font-semibold text-yellow-700">Ticket Type</span><Badge label={selectedInv.ticketTypeName} type="info"/></div>}
+        <div className="flex justify-between items-center"><span className="text-xs font-semibold text-yellow-700">Remaining</span><span className="font-bold text-yellow-800">{selectedInv.ticketsRemaining}</span></div>
+        <div className="flex justify-between items-center"><span className="text-xs font-semibold text-yellow-700">Price/ticket</span><span className="font-bold text-yellow-800">{fmt.currency(selectedInv.ticketPrice||selectedEvent?.ticketPrice||0)}</span></div>
+        <div className="flex justify-between items-center"><span className="text-xs font-semibold text-yellow-700">CE Points/ticket</span><span className="font-bold text-yellow-800">⭐ {selectedInv.pointsPerTicket||selectedEvent?.pointsPerTicket||10}</span></div>
+      </div>}
       <FF label="Quantity" required>
         <div className="flex items-center gap-3">
           <button type="button" onClick={()=>set("qty",Math.max(1,Number(form.qty)-1))} className="w-12 h-12 bg-gray-100 rounded-xl text-xl font-bold text-gray-700 flex items-center justify-center">−</button>
