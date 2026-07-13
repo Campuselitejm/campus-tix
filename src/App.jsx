@@ -707,17 +707,32 @@ function AdminRepInventory(){
 // ─── ADMIN SALES ──────────────────────────────────────────────
 function AdminSales(){
   const{data:sales=[],loading}=useAsync(()=>salesDB.getAll());
+  const{data:deleted=[],loading:dl,reload:reloadDeleted}=useAsync(()=>salesDB.getDeleted());
   const{data:events=[]}=useAsync(()=>eventsDB.getAll());
-  const[filterEvent,setFilterEvent]=useState("");const[search,setSearch]=useState("");
+  const[filterEvent,setFilterEvent]=useState("");
+  const[search,setSearch]=useState("");
+  const[tab,setTab]=useState("active");
+  const[detailModal,setDetailModal]=useState(null);
   const filtered=sales.filter(s=>(!filterEvent||s.eventId===filterEvent)&&(!search||s.repName.toLowerCase().includes(search.toLowerCase())||s.eventName.toLowerCase().includes(search.toLowerCase())));
+  const filteredDeleted=deleted.filter(s=>(!filterEvent||s.eventId===filterEvent)&&(!search||s.repName.toLowerCase().includes(search.toLowerCase())||s.eventName.toLowerCase().includes(search.toLowerCase())));
   const totalRev=filtered.reduce((s,x)=>s+x.totalValue,0);
   const rows=filtered.slice(0,100).map(s=>[
-    <div><p className="font-semibold text-sm">{s.eventName}</p><p className="text-xs text-gray-400">Wk {s.weekNumber}</p></div>,
+    <div><p className="font-semibold text-sm">{s.eventName}</p><p className="text-xs text-gray-400">Wk {s.weekNumber}</p>{s.ticketTypeName&&<Badge label={s.ticketTypeName} type="info"/>}</div>,
     <span className="text-sm">{s.repName}</span>,
     <span className="font-semibold">{s.quantitySold}</span>,
     <span className="font-bold text-emerald-600">{fmt.currency(s.totalValue)}</span>,
     <Badge label={s.paymentMethod} type={s.paymentMethod==="Cash"?"success":"info"}/>,
     <span className="text-xs text-gray-500">{fmt.dateTime(s.dateSold)}</span>,
+    <button onClick={()=>setDetailModal(s)} className="px-2 py-1 bg-gray-50 text-gray-600 text-xs rounded-lg hover:bg-gray-100">View</button>,
+  ]);
+  const deletedRows=filteredDeleted.slice(0,100).map(s=>[
+    <div><p className="font-semibold text-sm line-through text-gray-400">{s.eventName}</p><p className="text-xs text-gray-400">Wk {s.weekNumber}</p></div>,
+    <span className="text-sm text-gray-400">{s.repName}</span>,
+    <span className="text-gray-400">{s.quantitySold}</span>,
+    <span className="text-gray-400 line-through">{fmt.currency(s.totalValue)}</span>,
+    <Badge label={s.paymentMethod} type="default"/>,
+    <span className="text-xs text-gray-400">{fmt.dateTime(s.dateSold)}</span>,
+    <div><p className="text-xs text-red-500 font-semibold">🗑️ Deleted</p><p className="text-xs text-gray-400">{fmt.dateTime(s.deletedAt)}</p><p className="text-xs text-gray-400">by {s.deletedBy}</p></div>,
   ]);
   return(
     <div className="space-y-5">
@@ -733,8 +748,34 @@ function AdminSales(){
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search rep, event..."/></div>
           <select className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none bg-white" value={filterEvent} onChange={e=>setFilterEvent(e.target.value)}><option value="">All Events</option>{events.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select>
         </div>
-        <Table headers={["Event","Rep","Qty","Total","Payment","Date"]} rows={rows} loading={loading} empty="No sales yet"/>
+        <div className="flex gap-2 mb-4">
+          <button onClick={()=>setTab("active")} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab==="active"?"text-gray-900":"bg-gray-100 text-gray-600"}`} style={tab==="active"?{background:GOLD}:{}}>Active Sales ({sales.length})</button>
+          <button onClick={()=>setTab("deleted")} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1 ${tab==="deleted"?"text-white":"bg-gray-100 text-gray-600"}`} style={tab==="deleted"?{background:"#dc2626"}:{}}>🗑️ Deleted ({deleted.length}){deleted.length>0&&tab!=="deleted"&&<span className="w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">{deleted.length}</span>}</button>
+        </div>
+        {tab==="active"&&<Table headers={["Event","Rep","Qty","Total","Payment","Date","Detail"]} rows={rows} loading={loading} empty="No sales yet"/>}
+        {tab==="deleted"&&<Table headers={["Event","Rep","Qty","Total","Payment","Original Date","Deletion Info"]} rows={deletedRows} loading={dl} empty="No deleted sales"/>}
       </div>
+
+      {/* Sale Detail Modal */}
+      <Modal isOpen={!!detailModal} onClose={()=>setDetailModal(null)} title="Sale Details" size="md">
+        {detailModal&&(
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Event</p><p className="font-semibold text-sm">{detailModal.eventName}</p></div>
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Rep</p><p className="font-semibold text-sm">{detailModal.repName}</p><p className="text-xs text-gray-400">{detailModal.repId}</p></div>
+              {detailModal.ticketTypeName&&<div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-blue-500">Ticket Type</p><p className="font-semibold text-sm">{detailModal.ticketTypeName}</p></div>}
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Qty Sold</p><p className="font-semibold text-sm">{detailModal.quantitySold} tickets</p></div>
+              <div className="bg-emerald-50 rounded-xl p-3"><p className="text-xs text-emerald-600">Price/Ticket</p><p className="font-bold text-sm">{fmt.currency(detailModal.ticketPrice)}</p></div>
+              <div className="bg-emerald-50 rounded-xl p-3"><p className="text-xs text-emerald-600">Total Value</p><p className="font-bold text-sm">{fmt.currency(detailModal.totalValue)}</p></div>
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Payment</p><p className="font-semibold text-sm">{detailModal.paymentMethod}</p></div>
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Week</p><p className="font-semibold text-sm">Week {detailModal.weekNumber}</p></div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Date & Time</p><p className="font-semibold text-sm">{fmt.dateTime(detailModal.dateSold)}</p></div>
+            {detailModal.customerName&&<div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500">Customer</p><p className="font-semibold text-sm">{detailModal.customerName}</p>{detailModal.customerPhone&&<WhatsAppBtn phone={detailModal.customerPhone}/>}</div>}
+            <button onClick={()=>setDetailModal(null)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Close</button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -1286,6 +1327,31 @@ function RepLogSale({repInfo,onSuccess}){
   );
 }
 
+
+// ─── REP DELETE SALE BUTTON ──────────────────────────────────
+function RepDeleteSaleBtn({sale,repId,onDeleted}){
+  const[modal,setModal]=useState(false);
+  const[deleting,setDeleting]=useState(false);
+  const{toast,show}=useToast();
+  const doDelete=async()=>{
+    setDeleting(true);
+    try{
+      await salesDB.softDelete(sale.id,repId,sale.repId,sale.eventId,sale.ticketTypeId||null,sale.quantitySold,sale.totalValue,sale.repInventoryId||null);
+      show("Sale deleted — inventory restored");
+      setModal(false);
+      if(onDeleted)onDeleted();
+    }catch(e){show("Error: "+e.message);}
+    setDeleting(false);
+  };
+  return(
+    <>
+      <button onClick={()=>setModal(true)} className="w-6 h-6 rounded-lg bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 text-xs flex items-center justify-center flex-shrink-0" title="Delete sale">🗑️</button>
+      <ConfirmModal isOpen={modal} onClose={()=>setModal(false)} onConfirm={doDelete} title="Delete Sale Entry" message={`Delete this sale of ${sale.quantitySold} ticket${sale.quantitySold>1?"s":""} (${fmt.currency(sale.totalValue)})? Inventory will be restored and CE points recalculated.`} confirmLabel="Delete Sale" danger/>
+      <Toast message={toast.message} visible={toast.visible}/>
+    </>
+  );
+}
+
 function RepMySales({repId}){
   const{data:sales=[],loading}=useAsync(()=>salesDB.getByRep(repId));
   const totalRev=sales.reduce((s,x)=>s+x.totalValue,0);
@@ -1300,8 +1366,16 @@ function RepMySales({repId}){
         sales.length===0?<EmptyState icon="🎟️" title="No sales yet" message="Log your first sale to see it here"/>:(
           <div className="space-y-3">{sales.map(s=>(
             <div key={s.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-start justify-between mb-1"><div><p className="font-bold text-gray-900 text-sm">{s.eventName}</p><p className="text-xs text-gray-400">{fmt.dateTime(s.dateSold)} · Wk {s.weekNumber}</p></div><span className="font-bold text-emerald-600">{fmt.currency(s.totalValue)}</span></div>
-              <div className="flex items-center justify-between text-xs text-gray-500"><span>🎟️ {s.quantitySold} tickets · {s.paymentMethod}</span><span className="font-semibold text-yellow-600">⭐ {s.quantitySold*10} pts</span></div>
+              <div className="flex items-start justify-between mb-1">
+                <div><p className="font-bold text-gray-900 text-sm">{s.eventName}</p><p className="text-xs text-gray-400">{fmt.dateTime(s.dateSold)} · Wk {s.weekNumber}</p>{s.ticketTypeName&&<span className="text-xs text-blue-600 font-semibold">{s.ticketTypeName}</span>}</div>
+                <div className="flex items-center gap-2"><span className="font-bold text-emerald-600">{fmt.currency(s.totalValue)}</span></div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 text-xs text-gray-500"><span>🎟️ {s.quantitySold} tickets · {s.paymentMethod}</span></div>
+                <div className="flex items-center gap-2"><span className="font-semibold text-yellow-600 text-xs">⭐ {s.quantitySold*(s.pointsPerTicket||10)} pts</span>
+                  <RepDeleteSaleBtn sale={s} repId={repId} onDeleted={reload}/>
+                </div>
+              </div>
             </div>
           ))}</div>
         )
