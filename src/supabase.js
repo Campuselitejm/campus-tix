@@ -133,9 +133,9 @@ export const inventoryDB = {
 
 // ─── TICKET SALES ─────────────────────────────────────────────
 export const salesDB = {
-  getAll: async () => (await api('GET','ct_sales',null,'?order=date_sold.desc')).map(cSale),
-  getByRep: async repId => (await api('GET','ct_sales',null,`?rep_id=eq.${repId}&order=date_sold.desc`)).map(cSale),
-  getByEvent: async eventId => (await api('GET','ct_sales',null,`?event_id=eq.${eventId}&order=date_sold.desc`)).map(cSale),
+  getAll: async () => (await api('GET','ct_sales',null,'?deleted=neq.true&order=date_sold.desc')).map(cSale),
+  getByRep: async repId => (await api('GET','ct_sales',null,`?rep_id=eq.${repId}&deleted=neq.true&order=date_sold.desc`)).map(cSale),
+  getByEvent: async eventId => (await api('GET','ct_sales',null,`?event_id=eq.${eventId}&deleted=neq.true&order=date_sold.desc`)).map(cSale),
   create: async data => {
     const now=new Date();
     const weekNum=Math.ceil(((now-new Date(now.getFullYear(),0,1))/86400000+1)/7);
@@ -145,6 +145,31 @@ export const salesDB = {
       await cePointsDB.addSale(data.repId,data.eventId,data.eventName,data.quantitySold,data.pointsPerTicket,data.repName,data.ceId,data.ticketTypeId,data.ticketTypeName);
     }
     return r[0]?cSale(r[0]):null;
+  },
+  getDeleted: async () => (await api('GET','ct_sales',null,'?deleted=eq.true&order=deleted_at.desc')).map(s=>({...cSale(s),deletedAt:s.deleted_at,deletedBy:s.deleted_by})),
+  getDeletedByEvent: async eventId => (await api('GET','ct_sales',null,`?event_id=eq.${eventId}&deleted=eq.true&order=deleted_at.desc`)).map(s=>({...cSale(s),deletedAt:s.deleted_at,deletedBy:s.deleted_by})),
+  softDelete: async (id, deletedBy, repId, eventId, ticketTypeId, qty, totalValue, inventoryId) => {
+    // Soft delete the sale
+    await api('PATCH','ct_sales',{deleted:true,deleted_at:new Date().toISOString(),deleted_by:deletedBy},`?id=eq.${id}`);
+    // Restore inventory
+    if(inventoryId){
+      const inv=await api('GET','ct_rep_inventory',null,`?id=eq.${inventoryId}`);
+      if(inv[0]){
+        await api('PATCH','ct_rep_inventory',{
+          tickets_sold:Math.max(0,inv[0].tickets_sold-qty),
+          cash_collected:Math.max(0,Number(inv[0].cash_collected)-totalValue)
+        },`?id=eq.${inventoryId}`);
+      }
+    }
+    // Recalculate CE points
+    const q=ticketTypeId?`?rep_id=eq.${repId}&event_id=eq.${eventId}&ticket_type_id=eq.${ticketTypeId}`:`?rep_id=eq.${repId}&event_id=eq.${eventId}&ticket_type_id=is.null`;
+    const ce=await api('GET','ct_ce_points',null,q);
+    if(ce[0]){
+      const newSold=Math.max(0,ce[0].tickets_sold-qty);
+      await api('PATCH','ct_ce_points',{tickets_sold:newSold,points_earned:newSold*ce[0].points_per_ticket},`?id=eq.${ce[0].id}`);
+    }
+    // Restore overall product inventory not needed for tickets
+    return true;
   },
 };
 
