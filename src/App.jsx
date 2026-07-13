@@ -1353,7 +1353,7 @@ function RepDeleteSaleBtn({sale,repId,onDeleted}){
 }
 
 function RepMySales({repId}){
-  const{data:sales=[],loading}=useAsync(()=>salesDB.getByRep(repId));
+  const{data:sales=[],loading,reload}=useAsync(()=>salesDB.getByRep(repId));
   const totalRev=sales.reduce((s,x)=>s+x.totalValue,0);
   const totalPts=sales.reduce((s,x)=>s+x.quantitySold,0)*10;
   return(
