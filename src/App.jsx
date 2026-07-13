@@ -1216,8 +1216,15 @@ function RepLogSale({repInfo,onSuccess}){
     if(selectedInv&&Number(form.qty)>selectedInv.ticketsRemaining){setError(`Only ${selectedInv.ticketsRemaining} tickets remaining`);return;}
     setLoading(true);
     try{
-      const pricePerTix=selectedInv.ticketPrice||0;
-      const pptRate=selectedInv.pointsPerTicket||selectedEvent?.pointsPerTicket||10;
+      // Get price from ticket type if inventory record has 0 (legacy records)
+      let pricePerTix=selectedInv.ticketPrice||0;
+      let pptRate=selectedInv.pointsPerTicket||10;
+      if(pricePerTix===0&&selectedInv.ticketTypeId){
+        try{
+          const tt=await ticketTypesDB.getById(selectedInv.ticketTypeId);
+          if(tt){pricePerTix=tt.price||0;pptRate=tt.pointsPerTicket||10;}
+        }catch{}
+      }
       const total=Number(form.qty)*pricePerTix;
       const pointsEarned=Number(form.qty)*pptRate;
       await salesDB.create({repId:repInfo.repId,repName:repInfo.name,eventId:selectedInv.eventId,eventName:selectedInv.eventName,ticketTypeId:selectedInv.ticketTypeId||null,ticketTypeName:selectedInv.ticketTypeName||null,quantitySold:Number(form.qty),ticketPrice:pricePerTix,totalValue:total,paymentMethod:form.paymentMethod,inventoryId:form.invId,pointsPerTicket:pptRate,ceId:repInfo.ceId});
