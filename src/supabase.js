@@ -125,7 +125,7 @@ export const inventoryDB = {
       await api('PATCH','ct_rep_inventory',{tickets_allocated:to[0].tickets_allocated+qty},`?id=eq.${to[0].id}`);
     } else {
       const ev=await eventsDB.getById(eventId);
-      await inventoryDB.create({repId:toRepId,repName:toRepName,eventId,eventName:ev?.name||'',ticketsAllocated:qty});
+      await inventoryDB.create({repId:toRepId,repName:toRepName,eventId,eventName:ev?.name||'',ticketTypeId:from[0].ticket_type_id||null,ticketTypeName:from[0].ticket_type_name||null,ticketPrice:Number(from[0].ticket_price||0),pointsPerTicket:from[0].points_per_ticket||10,ticketsAllocated:qty});
     }
     await api('PATCH','ct_return_inventory',{reassigned_to_rep_id:toRepId},{},`?rep_id=eq.${fromRepId}&event_id=eq.${eventId}&reassigned_to_rep_id=is.null`);
   },
