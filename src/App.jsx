@@ -540,7 +540,7 @@ function RepForm({initial,onSave,onClose,saving}){
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <FF label="Full Name" required error={errors.name}><input className={iCls} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FF>
-        <FF label="Rep ID" required error={errors.repId}><input className={`${iCls} uppercase`} value={form.repId} onChange={e=>set("repId",e.target.value)} placeholder="REP001" disabled={isEdit}/></FF>
+        <FF label="Rep ID" required error={errors.repId} hint={isEdit?"Use the 🔄 button in the reps table to safely change this":undefined}><input className={`${iCls} uppercase`} value={form.repId} onChange={e=>set("repId",e.target.value)} placeholder="REP001" disabled={isEdit}/></FF>
       </div>
       <FF label="Phone" hint="Tap to open WhatsApp"><input className={iCls} type="tel" value={form.phone||""} onChange={e=>set("phone",e.target.value)} placeholder="+1 876-555-0000"/></FF>
       <FF label="Email" required error={errors.email}><input className={iCls} type="email" value={form.email} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/></FF>
@@ -574,6 +574,7 @@ function AdminReps(){
     <div className="flex gap-1">
       <button onClick={()=>setModal({type:"view",rep:r})} className="w-7 h-7 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 text-xs flex items-center justify-center" title="View">👁️</button>
       <button onClick={()=>setModal({type:"edit",rep:r})} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs flex items-center justify-center" title="Edit">✏️</button>
+      <button onClick={()=>setModal({type:"changeid",rep:r})} className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 text-xs flex items-center justify-center" title="Change Rep ID">🔄</button>
       <button onClick={async()=>{await repsDB.update(r.id,{status:r.status==="Active"?"Inactive":"Active"});show("Status updated");reload();}} className={`w-7 h-7 rounded-lg text-xs flex items-center justify-center ${r.status==="Active"?"bg-orange-50 text-orange-600":"bg-green-50 text-green-600"}`}>{r.status==="Active"?"🚫":"✅"}</button>
       <button onClick={()=>setModal({type:"delete",rep:r})} className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs flex items-center justify-center" title="Delete">🗑️</button>
     </div>
@@ -623,6 +624,17 @@ function AdminReps(){
         )}
       </Modal>
       <ConfirmModal isOpen={modal?.type==="delete"} onClose={()=>setModal(null)} onConfirm={async()=>{await repsDB.delete(modal.rep.id);show("Rep deleted");reload();}} title="Delete Rep" message={`Delete ${modal?.rep?.name}?`} confirmLabel="Delete" danger/>
+      <Modal isOpen={modal?.type==="changeid"} onClose={()=>setModal(null)} title="Change Rep ID" size="md">
+        {modal?.rep&&<ChangeRepIdForm rep={modal.rep} onSave={async(newId)=>{
+          setSaving(true);
+          try{
+            await repsDB.changeRepId(modal.rep.id, modal.rep.repId, newId);
+            show(`Rep ID changed to ${newId} — all records updated`);
+            setModal(null);reload();
+          }catch(e){show("Error: "+e.message);}
+          setSaving(false);
+        }} onClose={()=>setModal(null)} saving={saving}/>}
+      </Modal>
       <Toast message={toast.message} visible={toast.visible}/>
     </div>
   );
@@ -654,6 +666,52 @@ function TicketTypeSelector({eventId,value,onChange}){
         {types.map(t=><option key={t.id} value={t.id}>{t.name} — {fmt.currency(t.price)} · ⭐{t.pointsPerTicket}pts</option>)}
       </select>
     </FF>
+  );
+}
+
+
+// ─── CHANGE REP ID FORM ───────────────────────────────────────
+function ChangeRepIdForm({rep,onSave,onClose,saving}){
+  const[newId,setNewId]=useState(rep.repId);
+  const[confirmed,setConfirmed]=useState(false);
+  const[error,setError]=useState("");
+  const submit=e=>{
+    e.preventDefault();
+    setError("");
+    const cleaned=newId.trim().toUpperCase();
+    if(!cleaned){setError("Rep ID cannot be empty");return;}
+    if(cleaned===rep.repId){setError("This is already their current Rep ID");return;}
+    if(!confirmed){setError("Please confirm you understand the impact");return;}
+    onSave(cleaned);
+  };
+  return(
+    <form onSubmit={submit} className="space-y-4">
+      <div className="bg-gray-50 rounded-xl p-3">
+        <p className="text-xs text-gray-500">Rep</p>
+        <p className="font-semibold text-sm">{rep.name}</p>
+        <p className="text-xs text-gray-400 mt-1">Current ID: <span className="font-mono font-semibold">{rep.repId}</span></p>
+      </div>
+      <FF label="New Rep ID" required error={error&&!confirmed?undefined:error}>
+        <input className={`${iCls} uppercase`} value={newId} onChange={e=>setNewId(e.target.value)} placeholder="e.g. VE0014058"/>
+      </FF>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 space-y-1">
+        <p className="font-semibold">This will update:</p>
+        <ul className="list-disc list-inside space-y-0.5">
+          <li>Their login ID (used with password)</li>
+          <li>Their CE ID (kept in sync automatically)</li>
+          <li>All existing sales, inventory, CE points and return records — nothing is lost</li>
+        </ul>
+      </div>
+      <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+        <input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-1"/>
+        <span>I understand this changes the rep's login ID and want to proceed.</span>
+      </label>
+      {error&&confirmed===false&&<p className="text-xs text-red-500">{error}</p>}
+      <div className="flex gap-3 pt-1">
+        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">Cancel</button>
+        <PBtn className="flex-1" loading={saving}>🔄 Change Rep ID</PBtn>
+      </div>
+    </form>
   );
 }
 
