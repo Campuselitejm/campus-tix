@@ -594,9 +594,11 @@ function AdminReps(){
                 </div>
                 <div className="flex gap-2 flex-shrink-0 ml-3">
                   <button onClick={async()=>{
-                    const newRepId="REP"+String(reps.filter(x=>x.status==="Active").length+1).padStart(3,"0");
-                    await repsDB.update(r.id,{status:"Active",repId:newRepId,mustChangePassword:true});
-                    show(`${r.name} approved as ${newRepId}`);reload();
+                    // Use the CE ID they were submitted with as their Rep ID.
+                    // Fallback to a generated REP### id only if no CE ID was provided.
+                    const finalId=(r.ceId&&r.ceId.trim())?r.ceId.trim().toUpperCase():"REP"+String(reps.filter(x=>x.status==="Active").length+1).padStart(3,"0");
+                    await repsDB.update(r.id,{status:"Active",repId:finalId,ceId:finalId,mustChangePassword:true});
+                    show(`${r.name} approved as ${finalId}`);reload();
                   }} className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white" style={{background:NAVY}}>✅ Approve</button>
                   <button onClick={async()=>{await repsDB.delete(r.id);show("Rep rejected");reload();}} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-600 hover:bg-red-100">❌ Reject</button>
                 </div>
