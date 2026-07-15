@@ -84,6 +84,16 @@ export const repsDB = {
   create: async data => { const r=await api('POST','ct_reps',sRep(data)); return r[0]?cRep(r[0]):null; },
   update: async (id,data) => { const r=await api('PATCH','ct_reps',sRep(data),`?id=eq.${id}`); return r[0]?cRep(r[0]):null; },
   delete: async id => api('DELETE','ct_reps',null,`?id=eq.${id}`),
+  changeRepId: async (dbId, oldRepId, newRepId) => {
+    // Update the rep record itself (repId + ceId together)
+    await api('PATCH','ct_reps',{rep_id:newRepId,ce_id:newRepId},`?id=eq.${dbId}`);
+    // Cascade to every table that stores rep_id as plain text
+    await api('PATCH','ct_rep_inventory',{rep_id:newRepId},`?rep_id=eq.${oldRepId}`);
+    await api('PATCH','ct_sales',{rep_id:newRepId},`?rep_id=eq.${oldRepId}`);
+    await api('PATCH','ct_ce_points',{rep_id:newRepId},`?rep_id=eq.${oldRepId}`);
+    await api('PATCH','ct_return_inventory',{rep_id:newRepId},`?rep_id=eq.${oldRepId}`);
+    return true;
+  },
   changePassword: async (id,pw) => { const r=await api('PATCH','ct_reps',{password:pw,must_change_password:false},`?id=eq.${id}`); return r[0]?cRep(r[0]):null; },
 };
 
