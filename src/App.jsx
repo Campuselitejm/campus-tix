@@ -386,12 +386,14 @@ function AdminEvents(){
   const rows=filtered.map(e=>{
     const eS=sales.filter(x=>x.eventId===e.id);
     const rev=eS.reduce((s,x)=>s+x.totalValue,0);
+    const sold=eS.reduce((s,x)=>s+(x.quantitySold||0),0);
     const cut=rev*e.commissionRate;
     return[
       <div><p className="font-semibold text-sm text-gray-900">{e.name}</p><p className="text-xs text-gray-400">{fmt.date(e.date)}</p></div>,
       <span className="text-sm text-gray-600">{e.venue||"—"}</span>,
       <span className="font-bold text-emerald-600">{fmt.currency(rev)}</span>,
       <span className="text-sm text-blue-600">{fmt.currency(cut)}</span>,
+      <span className="text-sm font-bold text-gray-900">{sold}</span>,
       <EventStatusBadge status={e.status}/>,
       <div className="flex gap-1">
         {e.promoterPhone&&<a href={waLink(e.promoterPhone)} target="_blank" rel="noreferrer" className="w-7 h-7 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 text-xs flex items-center justify-center" title="WhatsApp Promoter">📱</a>}
@@ -408,7 +410,7 @@ function AdminEvents(){
       <SHeader title="Events" subtitle={`${events.length} events`} action={<PBtn onClick={()=>setModal({type:"create"})}>➕ New Event</PBtn>}/>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Search events..."/></div>
-        <Table headers={["Event","Venue","Revenue","CT Cut","Status","Actions"]} rows={rows} loading={loading} empty="No events yet"/>
+        <Table headers={["Event","Venue","Revenue","CT Cut","Tix Sold","Status","Actions"]} rows={rows} loading={loading} empty="No events yet"/>
       </div>
       <Modal isOpen={modal?.type==="create"||modal?.type==="edit"} onClose={()=>setModal(null)} title={modal?.type==="edit"?`Edit: ${modal.event?.name}`:"Create Event"} size="lg">
         <EventForm initial={modal?.event} onSave={save} onClose={()=>setModal(null)} saving={saving}/>
@@ -1560,4 +1562,3 @@ function AppContent(){
 export default function App(){
   return <ErrorBoundary><AuthProvider><AppContent/></AuthProvider></ErrorBoundary>;
 }
-
