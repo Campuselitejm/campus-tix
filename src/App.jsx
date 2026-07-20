@@ -1560,3 +1560,4 @@ function AppContent(){
 export default function App(){
   return <ErrorBoundary><AuthProvider><AppContent/></AuthProvider></ErrorBoundary>;
 }
+
