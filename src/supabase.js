@@ -152,6 +152,7 @@ export const salesDB = {
     const r=await api('POST','ct_sales',{rep_id:data.repId,rep_name:data.repName,event_id:data.eventId,event_name:data.eventName,ticket_type_id:data.ticketTypeId||null,ticket_type_name:data.ticketTypeName||null,quantity_sold:data.quantitySold,ticket_price:data.ticketPrice,total_value:data.totalValue,payment_method:data.paymentMethod,date_sold:now.toISOString(),week_number:weekNum,customer_name:data.customerName||null,customer_phone:data.customerPhone||null,customer_email:data.customerEmail||null});
     if(r[0]){
       await inventoryDB.recordSale(data.inventoryId,data.quantitySold,data.totalValue);
+      try{await coordCommissionsDB.updateRevenue(data.eventId);}catch(e){}
       await cePointsDB.addSale(data.repId,data.eventId,data.eventName,data.quantitySold,data.pointsPerTicket,data.repName,data.ceId,data.ticketTypeId,data.ticketTypeName);
     }
     return r[0]?cSale(r[0]):null;
@@ -179,6 +180,7 @@ export const salesDB = {
       await api('PATCH','ct_ce_points',{tickets_sold:newSold,points_earned:newSold*ce[0].points_per_ticket},`?id=eq.${ce[0].id}`);
     }
     // Restore overall product inventory not needed for tickets
+    try{if(eventId)await coordCommissionsDB.updateRevenue(eventId);}catch(e){}
     return true;
   },
 };
